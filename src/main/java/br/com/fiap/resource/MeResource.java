@@ -1,47 +1,58 @@
 package br.com.fiap.resource;
 
-import br.com.fiap.dto.ChangePasswordRequestDto;
+import br.com.fiap.dao.UserDao;
 import br.com.fiap.dto.MeResponseDto;
 import br.com.fiap.dto.MensagemResponseDto;
-import br.com.fiap.service.AuthService;
+import br.com.fiap.model.User;
+import br.com.fiap.service.JwtService;
 import jakarta.inject.Inject;
-import jakarta.validation.Valid;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Path("/me")
-@Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class MeResource {
 
     @Inject
-    AuthService authService;
+    JwtService jwtService;
+
+    @Inject
+    UserDao userDao;
 
     @GET
-    public MeResponseDto me(@Context HttpHeaders headers) {
-        UUID userId = extrairUserId(headers);
-        return authService.buscarMe(userId);
-    }
+    public Response me(@HeaderParam("Authorization") String authorization) {
+        String token = extractBearerToken(authorization);
+        UUID userId = jwtService.validateAndGetUserId(token);
 
-    @PATCH
-    @Path("/password")
-    public MensagemResponseDto changePassword(@Valid ChangePasswordRequestDto dto,
-                                              @Context HttpHeaders headers) {
-        UUID userId = extrairUserId(headers);
-        authService.alterarSenha(userId, dto);
-        return new MensagemResponseDto("Senha atualizada com sucesso.");
-    }
-
-    private UUID extrairUserId(HttpHeaders headers) {
-        String auth = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
-        if (auth == null || !auth.startsWith("Bearer ")) {
-            throw new NotAuthorizedException("Token não informado");
+        Optional<User> userOpt = userDao.findById(userId);
+        if (userOpt.isEmpty()) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new MensagemResponseDto("Usuário não encontrado"))
+                    .build();
         }
-        String token = auth.substring("Bearer ".length()).trim();
-        return authService.extrairUserIdDeToken(token);
+
+        User user = userOpt.get();
+
+        MeResponseDto dto = new MeResponseDto();
+        dto.setId(user.getId().toString()); // <- String
+        dto.setNome(user.getNome());
+        dto.setEmail(user.getEmail());
+
+        return Response.ok(dto).build();
+    }
+
+    private String extractBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            throw new WebApplicationException("Token ausente ou inválido", Response.Status.UNAUTHORIZED);
+        }
+        return authorizationHeader.substring("Bearer ".length()).trim();
     }
 }

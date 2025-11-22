@@ -2,51 +2,65 @@ package br.com.fiap.resource;
 
 import br.com.fiap.dto.RecommendationHistoryRequestDto;
 import br.com.fiap.dto.RecommendationHistoryResponseDto;
-import br.com.fiap.service.AuthService;
+import br.com.fiap.model.RecommendationHistory;
+import br.com.fiap.service.JwtService;
 import br.com.fiap.service.RecommendationHistoryService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Path("/recomendacoes/historico")
-@Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 public class RecommendationHistoryResource {
+
+    @Inject
+    JwtService jwtService;
 
     @Inject
     RecommendationHistoryService historyService;
 
-    @Inject
-    AuthService authService;
-
     @GET
-    public List<RecommendationHistoryResponseDto> listar(@Context HttpHeaders headers) {
-        UUID userId = extrairUserId(headers);
-        return historyService.listar(userId);
+    public Response listar(@HeaderParam("Authorization") String authorization) {
+        String token = extractBearerToken(authorization);
+        UUID userId = jwtService.validateAndGetUserId(token);
+
+        List<RecommendationHistory> lista = historyService.listarPorUsuario(userId);
+
+        List<RecommendationHistoryResponseDto> dtos = lista.stream()
+                .map(RecommendationHistoryResponseDto::fromModel)
+                .collect(Collectors.toList());
+
+        return Response.ok(dtos).build();
     }
 
     @POST
-    public Response criar(@Valid RecommendationHistoryRequestDto dto,
-                          @Context HttpHeaders headers) {
-        UUID userId = extrairUserId(headers);
-        RecommendationHistoryResponseDto resp = historyService.salvar(userId, dto);
-        // 201 com o objeto criado
-        return Response.status(Response.Status.CREATED).entity(resp).build();
+    public Response criar(@HeaderParam("Authorization") String authorization,
+                          @Valid RecommendationHistoryRequestDto request) {
+
+        String token = extractBearerToken(authorization);
+        UUID userId = jwtService.validateAndGetUserId(token);
+
+        RecommendationHistory salvo = historyService.salvar(userId, request);
+
+        return Response.status(Response.Status.CREATED)
+                .entity(RecommendationHistoryResponseDto.fromModel(salvo))
+                .build();
     }
 
-    private UUID extrairUserId(HttpHeaders headers) {
-        String auth = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
-        if (auth == null || !auth.startsWith("Bearer ")) {
-            throw new NotAuthorizedException("Token não informado");
+    // -------------------------
+    // MÉTODO CORRETO E LIMPO
+    // -------------------------
+    private String extractBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            throw new WebApplicationException("Token ausente ou inválido", Response.Status.UNAUTHORIZED);
         }
-        String token = auth.substring("Bearer ".length()).trim();
-        return authService.extrairUserIdDeToken(token);
+        return authorizationHeader.substring("Bearer ".length()).trim();
     }
 }

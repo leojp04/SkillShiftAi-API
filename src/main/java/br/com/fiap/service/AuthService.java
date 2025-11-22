@@ -1,14 +1,18 @@
 package br.com.fiap.service;
 
 import br.com.fiap.dao.UserDao;
-import br.com.fiap.dto.*;
+import br.com.fiap.dto.AuthResponseDto;
+import br.com.fiap.dto.LoginRequestDto;
+import br.com.fiap.dto.RegisterRequestDto;
+import br.com.fiap.dto.SimpleUserDto;
 import br.com.fiap.model.User;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.NotAuthorizedException;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -17,94 +21,63 @@ public class AuthService {
     @Inject
     UserDao userDao;
 
-    // Token "fake" por enquanto (vai virar JWT depois)
-    private static final String TOKEN_PREFIX = "fake-token-";
+    @Inject
+    JwtService jwtService;
 
-    public String gerarTokenFake(UUID userId) {
-        return TOKEN_PREFIX + userId;
-    }
-
-    public UUID extrairUserIdDeToken(String token) {
-        if (token == null || !token.startsWith(TOKEN_PREFIX)) {
-            throw new NotAuthorizedException("Token inválido");
-        }
-        String idStr = token.substring(TOKEN_PREFIX.length());
-        return UUID.fromString(idStr);
-    }
-
-    public AuthResponseDto registrar(RegisterRequestDto dto) {
-
-        var existente = userDao.findByEmail(dto.getEmail());
-        if (existente.isPresent()) {
-            // 409 – conflito (e-mail já existe)
-            throw new WebApplicationException("E-mail já existe", 409);
+    public AuthResponseDto register(RegisterRequestDto dto) {
+        // UserDao.findByEmail retorna Optional<User>
+        Optional<User> existingOpt = userDao.findByEmail(dto.getEmail());
+        if (existingOpt.isPresent()) {
+            throw new WebApplicationException(
+                    "E-mail já cadastrado",
+                    Response.Status.CONFLICT
+            );
         }
 
-        User u = new User();
-        u.setId(UUID.randomUUID());
-        u.setNome(dto.getNome());
-        u.setEmail(dto.getEmail());
-        // ⚠️ Por enquanto sem hash, depois trocamos pra BCrypt
-        u.setSenhaHash(dto.getSenha());
-        u.setCreatedAt(Instant.now());
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setNome(dto.getNome());
+        user.setEmail(dto.getEmail());
+        // ideal: hash de senha; aqui mantém simples
+        user.setSenhaHash(dto.getSenha());
+        user.setCreatedAt(Instant.now());
 
-        userDao.insert(u);
+        userDao.insert(user);
 
-        SimpleUserDto usuDto = new SimpleUserDto();
-        usuDto.setId(u.getId().toString());
-        usuDto.setNome(u.getNome());
-        usuDto.setEmail(u.getEmail());
+        String token = jwtService.generateToken(user);
 
-        AuthResponseDto resp = new AuthResponseDto();
-        resp.setToken(gerarTokenFake(u.getId()));
-        resp.setUsuario(usuDto);
+        AuthResponseDto response = new AuthResponseDto();
+        response.setToken(token);
+        response.setUsuario(toSimpleUserDto(user));
 
-        return resp;
+        return response;
     }
 
     public AuthResponseDto login(LoginRequestDto dto) {
+        Optional<User> userOpt = userDao.findByEmail(dto.getEmail());
 
-        var user = userDao.findByEmail(dto.getEmail())
-                .orElseThrow(() -> new WebApplicationException("Credenciais inválidas", 400));
+        User user = userOpt.orElseThrow(() ->
+                new WebApplicationException("Credenciais inválidas", Response.Status.BAD_REQUEST)
+        );
 
-        // ⚠️ Por enquanto sem hash
         if (!user.getSenhaHash().equals(dto.getSenha())) {
-            throw new WebApplicationException("Credenciais inválidas", 400);
+            throw new WebApplicationException("Credenciais inválidas", Response.Status.BAD_REQUEST);
         }
 
-        SimpleUserDto usuDto = new SimpleUserDto();
-        usuDto.setId(user.getId().toString());
-        usuDto.setNome(user.getNome());
-        usuDto.setEmail(user.getEmail());
+        String token = jwtService.generateToken(user);
 
-        AuthResponseDto resp = new AuthResponseDto();
-        resp.setToken(gerarTokenFake(user.getId()));
-        resp.setUsuario(usuDto);
+        AuthResponseDto response = new AuthResponseDto();
+        response.setToken(token);
+        response.setUsuario(toSimpleUserDto(user));
 
-        return resp;
+        return response;
     }
 
-    public MeResponseDto buscarMe(UUID userId) {
-        var user = userDao.findById(userId)
-                .orElseThrow(() -> new NotAuthorizedException("Usuário não encontrado"));
-
-        MeResponseDto dto = new MeResponseDto();
+    private SimpleUserDto toSimpleUserDto(User user) {
+        SimpleUserDto dto = new SimpleUserDto();
         dto.setId(user.getId().toString());
         dto.setNome(user.getNome());
         dto.setEmail(user.getEmail());
         return dto;
-    }
-
-    public void alterarSenha(UUID userId, ChangePasswordRequestDto dto) {
-
-        var user = userDao.findById(userId)
-                .orElseThrow(() -> new NotAuthorizedException("Usuário não encontrado"));
-
-        if (!user.getSenhaHash().equals(dto.getSenhaAtual())) {
-            // 400 senhaAtual incorreta
-            throw new WebApplicationException("Senha atual incorreta", 400);
-        }
-
-        userDao.updatePassword(userId, dto.getNovaSenha());
     }
 }

@@ -24,7 +24,7 @@ public class AuthResource {
     @Path("/register")
     public AuthResponseDto register(@Valid RegisterRequestDto dto) {
         // 200 com { token, usuario } ou erros 400/409
-        return authService.registrar(dto);
+        return authService.register(dto);
     }
 
     @POST

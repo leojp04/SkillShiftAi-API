@@ -1,5 +1,6 @@
 package br.com.fiap.dto;
 
+import br.com.fiap.model.RecommendationHistory;
 import java.time.Instant;
 import java.util.List;
 
@@ -10,8 +11,16 @@ public class RecommendationHistoryResponseDto {
     private String macro_area;
     private List<String> cursos_recomendados;
 
-    // getters e setters
+    public static RecommendationHistoryResponseDto fromModel(RecommendationHistory model) {
+        RecommendationHistoryResponseDto dto = new RecommendationHistoryResponseDto();
+        dto.setId(model.getId().toString());
+        dto.setData(model.getData());
+        dto.setMacro_area(model.getMacroArea());
+        dto.setCursos_recomendados(model.getCursosRecomendados());
+        return dto;
+    }
 
+    // Getters e Setters
 
     public String getId() {
         return id;
