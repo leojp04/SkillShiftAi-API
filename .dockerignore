@@ -1,3 +1,6 @@
-*
-!target/*.jar
-!target/quarkus-app/**
+.git
+.gitignore
+target/
+.idea/
+.vscode/
+node_modules/
