@@ -11,10 +11,9 @@ RUN ./mvnw clean package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Copia TUDO que o Quarkus precisa para rodar JAR legacy
-COPY --from=build /app/target/quarkus-app ./quarkus-app
-COPY --from=build /app/target/*-runner.jar ./app.jar
+# copia o conteúdo gerado em target/quarkus-app
+COPY --from=build /app/target/quarkus-app ./
 
 EXPOSE 8080
 
-CMD ["java", "-jar", "app.jar"]
+CMD ["java", "-jar", "quarkus-run.jar"]
