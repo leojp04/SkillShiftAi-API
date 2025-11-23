@@ -4,16 +4,15 @@ WORKDIR /app
 
 COPY . .
 
-# Corrige o erro: dar permissão de execução ao mvnw
 RUN chmod +x mvnw
-
 RUN ./mvnw clean package -DskipTests
 
-# Stage 2 — Runtime da aplicação
+# Stage 2 — Runtime
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-COPY --from=build /app/target/*-SNAPSHOT.jar app.jar
+# copia o jar executável gerado
+COPY --from=build /app/target/*-runner.jar app.jar
 
 EXPOSE 8080
 CMD ["java", "-jar", "app.jar"]
