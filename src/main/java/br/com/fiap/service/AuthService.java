@@ -25,7 +25,7 @@ public class AuthService {
     JwtService jwtService;
 
     public AuthResponseDto register(RegisterRequestDto dto) {
-        // UserDao.findByEmail retorna Optional<User>
+
         Optional<User> existingOpt = userDao.findByEmail(dto.getEmail());
         if (existingOpt.isPresent()) {
             throw new WebApplicationException(
@@ -38,7 +38,7 @@ public class AuthService {
         user.setId(UUID.randomUUID());
         user.setNome(dto.getNome());
         user.setEmail(dto.getEmail());
-        // ideal: hash de senha; aqui mantém simples
+
         user.setSenhaHash(dto.getSenha());
         user.setCreatedAt(Instant.now());
 
@@ -79,5 +79,22 @@ public class AuthService {
         dto.setNome(user.getNome());
         dto.setEmail(user.getEmail());
         return dto;
+    }
+
+
+    public void alterarSenha(UUID userId, String senhaAtual, String novaSenha) {
+        Optional<User> opt = userDao.findById(userId);
+        if (opt.isEmpty()) {
+            throw new WebApplicationException("Usuário não encontrado", Response.Status.NOT_FOUND);
+        }
+
+        User user = opt.get();
+
+
+        if (!user.getSenhaHash().equals(senhaAtual)) {
+            throw new WebApplicationException("Senha atual inválida", Response.Status.BAD_REQUEST);
+        }
+
+        userDao.updatePassword(userId, novaSenha);
     }
 }
