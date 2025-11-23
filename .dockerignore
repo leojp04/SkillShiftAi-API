@@ -1,6 +1,4 @@
-.git
-.gitignore
 target/
 .idea/
 .vscode/
-node_modules/
+*.md
